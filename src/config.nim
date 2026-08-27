@@ -1,5 +1,5 @@
 import
-  std/[options, posix, re, sequtils, sets, strutils, sugar, tables],
+  std/[options, posix, sequtils, sets, strutils, sugar, tables],
   utils
 when not declared(system.stdout): import std/syncio
 
@@ -68,6 +68,32 @@ type
     preBuildCommand*: Option[string]
     sudoCommand*: seq[string]
 
+func parseConfigKeyval*(line: string): Option[tuple[key: string, value: string]] =
+  ## Parses pacman.conf-style `key = value` lines, following pacman's own
+  ## `parse_ini` (src/pacman/ini.c): split at the first `'='`, then trim
+  ## both halves of surrounding whitespace (`strtrim` isspace set, so tabs
+  ## count). The value keeps everything else verbatim. Empty keys and
+  ## lines without `'='` never match; there is no error path.
+  let eq = line.find('=')
+  if eq < 1: return none(tuple[key: string, value: string])
+  let key = strip(line[0 ..< eq])
+  if key.len == 0:
+    return none(tuple[key: string, value: string])
+
+  some((key, strip(line[(eq + 1)..^1])))
+
+func matchConfigSection*(line: string): Option[string] =
+  ## Mirrors pacman's parse_ini section rule exactly: a section header is a
+  ## line whose first character is `'['` and last is `']'`; the name is the
+  ## verbatim content between them (`"[a][b]"` names `"a][b"`). Anything
+  ## else -- including `'['`-prefixed lines with trailing junk -- is treated
+  ## as a directive by the caller, matching upstream behavior where such
+  ## lines warn as unrecognized directives instead of opening sections.
+  if line.startsWith("[") and line.endsWith("]"):
+    some(line[1 ..< ^1])
+  else:
+    none(string)
+
 proc readConfigFile*(configFile: string):
   (OrderedTable[string, ref Table[string, string]], bool) =
   var file: File
@@ -77,29 +103,30 @@ proc readConfigFile*(configFile: string):
 
   let wasError = if file.open(configFile):
       try:
-        var matches: array[2, string]
-
         while true:
           let line = readLine(file).strip(leading = true, trailing = true)
           if line.len > 0 and line[0] != '#':
-            if line.match(re"\[(.*)\]", matches):
-              currentCategory = matches[0]
+            let section = matchConfigSection(line)
+            if section.isSome:
+              currentCategory = section.unsafeGet
               if table.hasKey(currentCategory):
                 category = table[currentCategory]
               else:
                 category = newTable[string, string]()
                 table[currentCategory] = category
             elif currentCategory.len > 0:
-              if line.match(re"(\w+)\ *=\ *(.*)", matches):
-                if matches[0] == "IgnorePkg" or matches[0] == "HoldPkg":
-                  if category.hasKey(matches[0]):
-                    if not isEmptyOrWhitespace(matches[1]): # stop empty lines adding spaces
-                      category[matches[0]] = category[matches[0]] & " " & matches[1]
+              let kv = parseConfigKeyval(line)
+              if kv.isSome:
+                let (key, value) = kv.unsafeGet
+                if key == "IgnorePkg" or key == "HoldPkg":
+                  if category.hasKey(key):
+                    if not isEmptyOrWhitespace(value): # stop empty lines adding spaces
+                      category[key] = category[key] & " " & value
                   else:
-                    if not isEmptyOrWhitespace(matches[1]):
-                      category[matches[0]] = matches[1]
+                    if not isEmptyOrWhitespace(value):
+                      category[key] = value
                 else:
-                  category[matches[0]]= matches[1]
+                  category[key] = value
               else:
                 category[line]=""
 

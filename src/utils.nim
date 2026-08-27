@@ -156,6 +156,54 @@ proc parseNumberIntervals*(input: string; maxValue: Positive
       else: merged.add iv
   some(merged)
 
+func stripHtmlTags*(s: string): string =
+  ## Removes every region enclosed by `'<'` and the next matching `'>'`
+  ## found later on the same line -- i.e. markup fragments like `<br>` or
+  ## `<span class="x">` -- returning the remaining text.
+  ##
+  ## Guarantees: regions never span line breaks (`\n` terminates a region
+  ## without being consumed); regions never nest (the first closing bracket
+  ## ends the region); a delimiter without a pair (an unclosed `'<'`, or
+  ## text containing bare brackets) passes through verbatim, and scanning
+  ## resumes immediately after it so later well-formed regions are still
+  ## removed. Complexity is linear in the input length.
+  result = newStringOfCap(s.len)
+  var i = 0
+  while i < s.len:
+    if s[i] == '<':
+      let stop = s.find({'>', '\n'}, i + 1)
+      if stop != -1 and s[stop] == '>':
+        i = stop + 1
+        continue
+    result.add s[i]
+    inc i
+
+func replaceRuns*(s: string; chars: set[char]; minRun: Positive;
+    by: string): string =
+  ## Rewrites whitespace-style artifacts in one linear pass: every maximal
+  ## run of characters drawn from `chars` that spans at least `minRun`
+  ## characters becomes exactly `by`; shorter runs and everything outside
+  ## `chars` pass through untouched.
+  ##
+  ## Runs are maximal by construction and scanned greedily left to right,
+  ## so adjacent output segments never re-trigger the pattern, each
+  ## qualifying run maps to exactly one `by`, and the result length never
+  ## depends on evaluation order. Typical uses: collapsing aligned-column
+  ## space padding, double-spaced sentence gaps, and paragraph-break runs
+  ## of newlines back to their canonical forms.
+  result = newStringOfCap(s.len)
+  var i = 0
+  while i < s.len:
+    var j = i
+    let segIsRun = s[i] in chars
+    while j < s.len and ((s[j] in chars) == segIsRun):
+      inc j
+    if segIsRun and j - i >= minRun:
+      result.add by
+    else:
+      result.add s[i ..< j]
+    i = j
+
 proc opt*[K, V](table: Table[K, V], key: K): Option[V] =
   if table.hasKey(key): some(table[key]) else: none(V)
 
