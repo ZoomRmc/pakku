@@ -68,19 +68,6 @@ type
     preBuildCommand*: Option[string]
     sudoCommand*: seq[string]
 
-func parseConfigKeyval*(line: string): Option[tuple[key: string, value: string]] =
-  ## Parses pacman.conf-style `key = value` lines, following pacman's own
-  ## `parse_ini` (src/pacman/ini.c): split at the first `'='`, then trim
-  ## both halves of surrounding whitespace (`strtrim` isspace set, so tabs
-  ## count). The value keeps everything else verbatim. Empty keys and
-  ## lines without `'='` never match; there is no error path.
-  let eq = line.find('=')
-  if eq < 1: return none(tuple[key: string, value: string])
-  let key = strip(line[0 ..< eq])
-  if key.len == 0:
-    return none(tuple[key: string, value: string])
-
-  some((key, strip(line[(eq + 1)..^1])))
 
 func matchConfigSection*(line: string): Option[string] =
   ## Mirrors pacman's parse_ini section rule exactly: a section header is a
@@ -115,7 +102,7 @@ proc readConfigFile*(configFile: string):
                 category = newTable[string, string]()
                 table[currentCategory] = category
             elif currentCategory.len > 0:
-              let kv = parseConfigKeyval(line)
+              let kv = splitKeyval(line)
               if kv.isSome:
                 let (key, value) = kv.unsafeGet
                 if key == "IgnorePkg" or key == "HoldPkg":
@@ -207,8 +194,9 @@ proc obtainConfig*(config: PacmanConfig): Config =
     aurRepo = options.opt("AurRepo").get("aur")
 
   if config.common.dbs.find(aurRepo) >= 0:
-    raise commandError(tr"repo '$#' can not be used as fake AUR repository" % [aurRepo],
-      colorNeeded = some(color))
+    raise commandError(tr"repo '$#' can not be used as fake AUR repository" %
+      [aurRepo], colorNeeded = some(color))
+
 
   if aurRepo.find('/') >= 0:
     raise commandError(trp("could not register '%s' database (%s)\n") %

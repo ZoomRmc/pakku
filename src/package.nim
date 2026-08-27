@@ -1,5 +1,5 @@
 import
-  options, os, parseutils, sequtils, sets, strutils, sugar, tables, utils,
+  options, os, sequtils, sets, strutils, sugar, tables, utils,
   "wrapper/alpm"
 when not declared(system.stdout): import std/syncio
 
@@ -289,23 +289,17 @@ proc parsePackageReference*(name: string, withDescription: bool): PackageReferen
   (pkgName, description, constraint)
 
 func parseSrcInfoLine*(line: string): Option[tuple[key: string, value: string]] =
-  ## Mirrors the previous PCRE pattern `[\t\ ]*(\w+)\ =\ (.*)`:
-  ## optional leading spaces/tabs; a key of one or more ASCII word
-  ## characters (`[A-Za-z0-9_]`); then exactly `" = "` — one space, the
-  ## equals sign, one space (so `k= v`, `k  = v` do not match); the value
-  ## is the remainder of the line verbatim.
-  var i = skipWhile(line, {' ', '\t'})
-  let keyStart = i
-  inc(i, skipWhile(line, IdentChars, i))
-  let keyEnd = i
-  if keyEnd == keyStart or keyEnd + 2 >= line.len or
-      line[keyEnd] != ' ' or line[keyEnd + 1] != '=' or
-      line[keyEnd + 2] != ' ':
-    return none(tuple[key: string, value: string])
+  ## Reads one `.SRCINFO` directive under the same lenient contract every
+  ## ecosystem consumer applies (split at first `'='`, trim both sides).
+  ## Keys are additionally restricted to `[A-Za-z0-9_]+`, matching the
+  ## PKGBUILD variable schema those directives are generated from.
+  let kv = line.splitKeyval()
+  if kv.isSome and kv.unsafeGet.key.allCharsInSet(IdentChars):
+    kv
+  else:
+    none(tuple[key: string, value: string])
 
-  some((line[keyStart ..< keyEnd], line[(keyEnd + 3)..^1]))
-
-proc parseSrcInfoKeys(srcInfo: string):
+proc parseSrcInfoKeys*(srcInfo: string):
   tuple[baseSeq: ref seq[SrcInfoPair], table: OrderedTable[string, ref seq[SrcInfoPair]]] =
   ## Splits a `.SRCINFO` body into per-pkgname pair lists, mirroring the
   ## previous PCRE-based loop exactly (same accepted line shape, same
