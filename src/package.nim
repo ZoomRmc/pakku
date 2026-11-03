@@ -70,7 +70,7 @@ type
     git: GitRepo
   ]
 
-  SrcInfoPair = tuple[key: string, value: string]
+  SrcInfoPair = KeyvalPair
 
 const
   packageRepos: seq[PackageRepo] = @[
@@ -288,7 +288,7 @@ proc parsePackageReference*(name: string, withDescription: bool): PackageReferen
   let constraint = operation.map(toConstraint)
   (pkgName, description, constraint)
 
-func parseSrcInfoLine*(line: string): Option[tuple[key: string, value: string]] =
+func parseSrcInfoLine*(line: string): Option[SrcInfoPair] =
   ## Reads one `.SRCINFO` directive under the same lenient contract every
   ## ecosystem consumer applies (split at first `'='`, trim both sides).
   ## Keys are additionally restricted to `[A-Za-z0-9_]+`, matching the
@@ -297,7 +297,7 @@ func parseSrcInfoLine*(line: string): Option[tuple[key: string, value: string]] 
   if kv.isSome and kv.unsafeGet.key.allCharsInSet(IdentChars):
     kv
   else:
-    none(tuple[key: string, value: string])
+    none(SrcInfoPair)
 
 proc parseSrcInfoKeys*(srcInfo: string):
   tuple[baseSeq: ref seq[SrcInfoPair], table: OrderedTable[string, ref seq[SrcInfoPair]]] =

@@ -1,5 +1,5 @@
 import std/[options, os, tables, unittest]
-import ../src/config, ../src/utils
+import ../src/config
 
 suite "matchConfigSection":
   # canonical rule from src/pacman/ini.c: '[' first char + ']' last char,

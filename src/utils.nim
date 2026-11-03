@@ -34,6 +34,8 @@ type
     shell: string
   ]
 
+  KeyvalPair* = tuple[key: string, value: string]
+
 proc cgetenv*(name: cstring): cstring
   {.importc: "getenv", header: "<stdlib.h>".}
 
@@ -204,17 +206,16 @@ func replaceRuns*(s: string; chars: set[char]; minRun: Positive;
       result.add s[i ..< j]
     i = j
 
-func splitKeyval*(line: string): Option[tuple[key: string, value: string]] =
+func splitKeyval*(line: string): Option[KeyvalPair] =
   ## Splits an INI-style directive at its first `'='`, trimming whitespace
   ## from both halves (the same reading contract as pacman's parse_ini and
   ## every other lenient `.SRCINFO` consumer). Lines without `'='` or with
   ## an empty key do not match; empty values do.
   let eq = line.find('=')
-  if eq < 1: return none(tuple[key: string, value: string])
+  if eq < 1: return none(KeyvalPair)
   let key = strip(line[0 ..< eq])
-  if key.len == 0: return none(tuple[key: string, value: string])
+  if key.len == 0: return none(KeyvalPair)
   some((key, strip(line[(eq + 1)..^1])))
-
 
 proc opt*[K, V](table: Table[K, V], key: K): Option[V] =
   if table.hasKey(key): some(table[key]) else: none(V)

@@ -1,4 +1,4 @@
-import std/[os, options, tables, unittest]
+import std/[options, unittest]
 import ../src/utils
 
 suite "stripHtmlTags":
