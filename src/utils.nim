@@ -167,18 +167,33 @@ func stripHtmlTags*(s: string): string =
   ## without being consumed); regions never nest (the first closing bracket
   ## ends the region); a delimiter without a pair (an unclosed `'<'`, or
   ## text containing bare brackets) passes through verbatim, and scanning
-  ## resumes immediately after it so later well-formed regions are still
-  ## removed. Complexity is linear in the input length.
+  ## resumes from there so later well-formed regions are still removed.
+  ##
+  ## Single pass with one cursor: searching ahead for a closing bracket on
+  ## every '<' would make a run of unmatched brackets quadratic.
   result = newStringOfCap(s.len)
   var i = 0
+  # index of a '<' still awaiting its '>', or -1 outside a region
+  var open = -1
   while i < s.len:
-    if s[i] == '<':
-      let stop = s.find({'>', '\n'}, i + 1)
-      if stop != -1 and s[stop] == '>':
-        i = stop + 1
-        continue
-    result.add s[i]
+    let c = s[i]
+    if c == '\n':
+      # a region cannot span a line break, so a pending one passes through
+      if open != -1:
+        result.add '<'
+        result.add s[open + 1 ..< i]
+        open = -1
+      result.add c
+    elif open != -1:
+      if c == '>': open = -1
+    elif c == '<':
+      open = i
+    else:
+      result.add c
     inc i
+  if open != -1:
+    result.add '<'
+    result.add s[open + 1 .. ^1]
 
 func replaceRuns*(s: string; chars: set[char]; minRun: Positive;
     by: string): string =

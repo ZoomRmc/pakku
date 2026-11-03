@@ -230,14 +230,12 @@ template toPackageReference*(pkg: RpcPackageInfo): PackageReference =
 func splitVersionConstraint*(depstring: string):
     tuple[name: string, operation: Option[ConstraintOperation], version: string] =
   ## Splits a dependency string into `(name, operation, version)`, following
-  ## libalpm's `alpm_dep_from_string` (deps.c): the first `'<'` (or first
-  ## `'>'`) anywhere in the string selects the operator, upgraded to its
-  ## two-char form when `=` directly follows; a lone `'='` is consulted only
-  ## when neither `<` nor `>` occur. Name is everything before the operator
-  ## and may be empty; version is the remainder. Descriptions ("pkg >= 1:
-  ## some description") are expected to be split by the caller already,
-  ## as `parsePackageReference` does.
-
+  ## libalpm's `alpm_dep_from_string` (deps.c): `<` outranks `>` which outranks
+  ## `=`, independently of position, and the operator widens to its two-char
+  ## form when `=` directly follows. Name is everything before the operator and
+  ## may be empty; version is the remainder. Descriptions ("pkg >= 1: some
+  ## description") are expected to be split by the caller already, as
+  ## `parsePackageReference` does.
   let ltPos = depstring.find('<')
   let gtPos = depstring.find('>')
 
